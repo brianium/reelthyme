@@ -1,0 +1,50 @@
+# Reelthyme Library Context
+
+Reelthyme is a Clojure/ClojureScript library that provides a core.async–based interface to OpenAI’s real-time API. It handles:
+- JSON serialization/deserialization for events.
+- WebSocket transport on the JVM.
+- WebRTC transport in ClojureScript.
+- Audio capture and playback.
+
+## Key Namespaces
+
+src/cljc/reelthyme/schema.cljc
+  • Defines Malli schemas for all client events and server responses.
+  • `ClientEvent` is a multimethod on `:type` dispatch.
+  • Schemas include: Session, Message, ConversationItem, Response, TranscriptionSession, etc.
+  • Use `(reelthyme.schema/validate event)` to enforce schema correctness at runtime.
+
+src/cljc/reelthyme/core.cljc
+  • `connect!` opens a channel to OpenAI:
+    – JVM: WebSocket via `reelthyme.transport.websocket`.
+    – cljs: WebRTC via platform APIs.
+    – Transforms input with `in->json`, output with `out->json`.
+    – Filters out pongs, delivers only valid events.
+  • `stream!` returns `[text-channel stop-audio]`:
+    – Routes `"response.audio.delta"` to an audio channel.
+    – Non-audio events to the returned text channel.
+    – Automatically stops audio and closes channels on end.
+  • `capture-audio!` starts microphone capture and pipelines audio chunks as `:input_audio_buffer.append` events.
+
+## Usage Patterns
+
+1. Open a session channel:
+   ```
+   (def session-ch (connect! {:xf-in (map validate)}))
+   ```
+2. Stream events and control audio:
+   ```
+   (let [[ev-ch stop-audio] (stream! session-ch)]
+     ;; ev-ch receives server events; stop-audio stops playback.
+   )
+   ```
+3. Send client events by putting maps conforming to `ClientEvent` on `session-ch`.
+
+## Environment
+
+- JVM requires `OPENAI_API_KEY` env var.
+- Default WebSocket URI:  
+  `wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17`
+- Customize via options to `connect!`.
+
+This document should provide sufficient context for an LLM to generate, validate, and manipulate events correctly using the Reelthyme library.
