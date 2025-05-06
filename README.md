@@ -3,6 +3,8 @@
 A Clojure library for building [realtime conversations](https://platform.openai.com/docs/guides/realtime-conversations) using
 OpenAI's [Realtime API](https://platform.openai.com/docs/guides/realtime)
 
+[![Clojars Project](https://img.shields.io/clojars/v/com.github.brianium/reelthyme.svg)](https://clojars.org/com.github.brianium/reelthyme)
+
 ## Todo
 
 - [x] WebSocket transport for JVM
