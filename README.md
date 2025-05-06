@@ -10,7 +10,7 @@ OpenAI's [Realtime API](https://platform.openai.com/docs/guides/realtime)
 
 ## Overview
 
-reelthyme provides a simple, core.async-driven API for interacting with OpenAI's Realtime API. On the JVM it uses WebSocket, while ClojureScript leverages WebRTC. Use it to build multimodal, real-time conversational experiences with minimal boilerplate.
+reelthyme provides a simple, core.async-driven API for interacting with OpenAI's Realtime API. On the JVM it uses WebSocket, while ClojureScript will leverage WebRTC. Use it to build multimodal, real-time conversational experiences with minimal boilerplate.
 
 ## Key Concepts
 
@@ -39,21 +39,28 @@ Open a realtime session, with optional event validation:
   (rt/connect! {:xf-in (map sc/validate)})  ;; validate outgoing events
 ```
 
+Authentication can be provided as an `:api-key` option, or the default will attempt to use
+the `OPENAI_API_KEY` environment variable.
+
+The `reelthyme.schema` namespace is completely optional. The `validate` function provided by it is a great
+addition to the development environment to ensure properly constructed client events are being sent.
+
 ### 2. Stream Events
 
 Separate audio deltas from other events:
 
 ```clojure
-(def [event-ch stop-audio]
-  (rt/stream! session-ch))
-
-(a/go-loop []
-  (when-let [ev (a/<! event-ch)]
-    (println "Server event:" ev)
-    (recur)))
+;;; Receive server events as plain Clojure maps
+(let [[event-ch stop-audio] (rt/stream! session-ch)]
+  (a/go-loop []
+    (when-let [ev (a/<! event-ch)]
+      (println "Server event:" ev)
+      (recur))))
 ```
 
 ### 3. Send Messages
+
+Send client events as plain Clojure maps. 
 
 ```clojure
 ;; Send a text message
@@ -79,7 +86,6 @@ Separate audio deltas from other events:
 ;; Later, stop capturing
 (stop-capture)
 ```
-
 ## Example Workflow
 
 1. **connect!** opens and authenticates the channel.  
@@ -90,5 +96,5 @@ Separate audio deltas from other events:
 ## Next Steps
 
 - Explore `reelthyme.schema` for built-in event validation.  
-- Customize transports and logging via `:xf-in`, `:xf-out`, and `:ex-handler` options.  
+- Customize transports and logging via `:xf-in`, `:xf-out`, `:ex-handler`, `:log-fn` options.  
 - Build responsive UIs or backends that react to real-time OpenAI events.  
