@@ -5,4 +5,12 @@
            org.clojure/clojure               {:mvn/version "1.12.0"}
            org.clojure/core.async            {:mvn/version "1.8.741"}}
  :aliases {:dev {:extra-paths ["dev"]
-                 :extra-deps  {org.clojure/tools.namespace {:mvn/version "1.5.0"}}}}}
+                 :extra-deps  {org.clojure/tools.namespace {:mvn/version "1.5.0"}}}
+           :slim {:deps {io.github.abogoyavlensky/slim {:mvn/version "LATEST"}
+                         slipset/deps-deploy {:mvn/version "0.2.2"}}
+                  :ns-default slim.lib
+                  :exec-args {:lib         com.github.brianium/reelthyme
+                              :version     "202505061224"
+                              :url         "https://github.com/brianium/reelthyme"
+                              :description "Build realtime conversational apps with the OpenAI Realtime API"
+                              :developer   "Brian Scaturro"}}}}

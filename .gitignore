@@ -9,3 +9,4 @@
 .aider.chat.history.md
 .clj-kondo
 .aider*
+target/
