@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <link rel="preconnect" href="https://rsms.me/">
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+    <link href="css/dev.css" rel="stylesheet" />
+  </head>
+  <body>
+    <section class="panel">
+      <h1>OpenAI Realtime WebRTC</h1>
+      <p>
+	<em>All server events will be logged to the console.</em>
+      </p>
+      <p>
+	<em>Audio will be played on the default device, transcripts will be logged</em>
+      </p>
+      <form>
+	<div class="form-group">
+	  <p>
+	    Modalities:
+	  </p>
+	  <label for="modality-audio">
+	    audio (requests mic access)
+	    <input type="checkbox" name="modalities" value="audio" id="modality-audio" />
+	  </label>
+	  <label for="modality-text">
+	    text (required)
+	    <input type="checkbox" name="modalities" value="text" id="modality-text" checked disabled />
+	  </label>
+	</div>
+	<button id="thebutton" type="button">
+	  Commence Reelthyme
+	</button>
+	<div class="form-group" id="text-group">
+	  <label for="text">Text Input</label>
+	  <textarea name="text" id="text"></textarea>
+	  <button type="button" id="send">
+	    Send Text
+	  </button>
+	</div>
+      </form>
+    </section>
+    <section class="panel" id="session-settings">
+    </section>
+    <script src="cljs-out/dev-main.js" type="text/javascript"></script>
+  </body>
+</html>

@@ -1,0 +1,83 @@
+/* CSS */
+:root {
+  font-family: Inter, sans-serif;
+  font-feature-settings: 'liga' 1, 'calt' 1; /* fix for Chrome */
+}
+@supports (font-variation-settings: normal) {
+  :root { font-family: InterVariable, sans-serif; }
+}
+
+body {
+    background-color: black;
+    color: #fff;
+}
+
+.panel {
+    padding: 2rem 4rem;
+}
+
+h1 {
+    margin-bottom: 1rem;
+}
+
+textarea {
+    background-color: #444;
+    color: #fff;
+    display: block;
+    width: 300px;
+    min-height: 100px;
+}
+
+textarea + button {
+    margin-top: 1.6rem;
+}
+
+label:has(+ textarea) {
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+}
+
+#text-group {
+    opacity: 0;
+    transition: opacity 250ms;
+    &.visible {
+	opacity: 1;
+    }
+}
+
+button {
+    background-color: black;
+    border: 1px solid white;
+    color: #fff;
+    cursor: pointer;
+    text-transform: uppercase;
+    padding: 1rem 2rem;
+    transition: background-color 250ms;
+
+    &:hover {
+	background-color: #fff;
+	color: black;
+    }
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    margin: 0 0 2rem;
+    align-items: flex-start;
+    label {
+	cursor: pointer;
+	display: flex;
+	flex-direction: row-reverse;
+
+	&:hover {
+	    text-decoration: underline;
+	}
+    }
+    label input {
+	margin-right: 0.5rem;
+    }
+    label + label {
+	margin-top: 1rem;
+    }
+}

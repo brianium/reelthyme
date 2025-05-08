@@ -3,7 +3,7 @@
   The intended use case for this transport type is server-to-server applications."
   (:require [clojure.core.async :as a :refer [>! <! go-loop]]
             [clojure.core.async.impl.protocols :as proto :refer [ReadPort WritePort Channel]])
-  (:import (java.net.http HttpClient WebSocket WebSocket$Builder  WebSocket$Listener)
+  (:import (java.net.http HttpClient WebSocket WebSocket$Builder WebSocket$Listener)
            (java.net URI)
            (java.nio ByteBuffer)
            (java.util.concurrent CompletableFuture)))

@@ -1,50 +1,77 @@
-# Reelthyme Library Context
+# Reelthyme Usage Guide for LLM Agents
 
-Reelthyme is a Clojure/ClojureScript library that provides a core.async–based interface to OpenAI’s real-time API. It handles:
-- JSON serialization/deserialization for events.
-- WebSocket transport on the JVM.
-- WebRTC transport in ClojureScript.
-- Audio capture and playback.
+This guide helps an LLM integrate with Reelthyme to build realtime conversational applications in Clojure or ClojureScript using OpenAI’s Realtime API.
 
-## Key Namespaces
+## Core Functions
 
-src/cljc/reelthyme/schema.cljc
-  • Defines Malli schemas for all client events and server responses.
-  • `ClientEvent` is a multimethod on `:type` dispatch.
-  • Schemas include: Session, Message, ConversationItem, Response, TranscriptionSession, etc.
-  • Use `(reelthyme.schema/validate event)` to enforce schema correctness at runtime.
+- **connect!**: Opens a realtime session and returns a core.async channel.  
+  - JVM: WebSocket transport.  
+  - ClojureScript: WebRTC transport (audio capture and playback built-in).  
+- **stream!** (JVM only): Splits a session channel into `[event-ch stop-audio]`.  
+- **capture-audio!** (JVM only): Begins microphone capture, returns a stop function.  
+- **Closing** the session channel stops audio and releases resources.
 
-src/cljc/reelthyme/core.cljc
-  • `connect!` opens a channel to OpenAI:
-    – JVM: WebSocket via `reelthyme.transport.websocket`.
-    – cljs: WebRTC via platform APIs.
-    – Transforms input with `in->json`, output with `out->json`.
-    – Filters out pongs, delivers only valid events.
-  • `stream!` returns `[text-channel stop-audio]`:
-    – Routes `"response.audio.delta"` to an audio channel.
-    – Non-audio events to the returned text channel.
-    – Automatically stops audio and closes channels on end.
-  • `capture-audio!` starts microphone capture and pipelines audio chunks as `:input_audio_buffer.append` events.
+## Usage in Clojure (JVM)
 
-## Usage Patterns
-
-1. Open a session channel:
+1. Require namespaces:
+   ```clojure
+   (require '[reelthyme.core :as rt]
+            '[reelthyme.schema :as sc]
+            '[clojure.core.async :as a])
    ```
-   (def session-ch (connect! {:xf-in (map validate)}))
+2. Connect to a session:
+   ```clojure
+   (def session-ch (rt/connect! {:xf-in (map sc/validate)}))
    ```
-2. Stream events and control audio:
+3. Stream events and audio:
+   ```clojure
+   (let [[ev-ch stop-audio] (rt/stream! session-ch)]
+     (a/go-loop []
+       (when-let [ev (a/<! ev-ch)]
+         ;; handle ev
+         (recur))))
    ```
-   (let [[ev-ch stop-audio] (stream! session-ch)]
-     ;; ev-ch receives server events; stop-audio stops playback.
-   )
+4. Send client events:
+   ```clojure
+   (a/put! session-ch
+           {:type "conversation.item.create"
+            :item {...}})
    ```
-3. Send client events by putting maps conforming to `ClientEvent` on `session-ch`.
+5. Capture and stop audio:
+   ```clojure
+   (def stop (rt/capture-audio! session-ch))
+   ;; later (stop)
+   ```
 
-## Environment
+## Usage in ClojureScript (WebRTC)
 
-- JVM requires `OPENAI_API_KEY` env var.
-- Default WebSocket URI:  
-  `wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17`
-- Customize via options to `connect!`.
+1. Require namespaces:
+   ```clojure
+   (ns my-app.core
+     (:require [reelthyme.core :as rt]
+               [reelthyme.schema :as sc]
+               [cljs.core.async :as a]))
+   ```
+2. Fetch a session map from your backend and connect:
+   ```clojure
+   (def session (<! (fetch-session {:modalities ["audio" "text"]})))
+   (def session-ch (rt/connect! session {:xf-in (map sc/validate)}))
+   ```
+3. Read events directly:
+   ```clojure
+   (a/go-loop []
+     (when-let [ev (a/<! session-ch)]
+       ;; handle ev
+       (recur)))
+   ```
+4. Send client events with `a/put!` on `session-ch`.  
+5. No need for `stream!` or `capture-audio!`—WebRTC handles audio automatically.
 
-This document should provide sufficient context for an LLM to generate, validate, and manipulate events correctly using the Reelthyme library.
+## Example Workflow
+
+1. Connect with desired modalities (e.g. `["text" "audio"]`).  
+2. For JVM: call `stream!` and `capture-audio!` as needed.  
+3. For ClojureScript: read and write on `session-ch` directly.  
+4. Close `session-ch` to end the session and release audio.
+
+This guide should equip an LLM to effectively build and manage realtime conversational applications with Reelthyme in both Clojure and ClojureScript environments.

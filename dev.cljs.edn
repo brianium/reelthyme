@@ -1,0 +1,3 @@
+^{:css-dirs ["resources/public/css"]
+  :ring-handler example.handler/handler}
+{:main example.webrtc}
