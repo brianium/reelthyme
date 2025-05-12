@@ -150,6 +150,3 @@ Check out the [example ClojureScript application](dev/example/webrtc.cljs). It m
 ## Note on Acoustic Echo Cancellation:
 
 Acoustic Echo Cancellation (AEC) can be used to prevent awkward experiences where an agent hears itself and gets stuck in an infinite loop speaking to itself. AEC comes standard with WebRTC, so this issue should not surface when using it. If using the websocket transport on the JVM, you maybe have a better experience using a headset or disabling vads for a more "push to talk" approach.
-
-## Todo
-- [ ] Implement Acoustic Echo Cancellation (AEC) for JVM applications
