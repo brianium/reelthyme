@@ -9,6 +9,7 @@ OpenAI's [Realtime API](https://platform.openai.com/docs/guides/realtime)
 
 - [x] WebSocket transport for JVM
 - [x] WebRTC transport for ClojureScript
+- [ ] Acoustic Echo Cancellation (AEC) support for JVM
 
 ## Overview
 
