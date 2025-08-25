@@ -45,7 +45,7 @@
    [:fn {:error/fn (fn [{:keys [value]} _]
                      (if (= "semantic_vad" (:type value))
                        "semantic_vad only allows settings: eagerness"
-                       "server_vad only allows settings: prefix_padding_ms, silence_duratino_ms, threshold"))}
+                       "server_vad only allows settings: prefix_padding_ms, silence_duration_ms, threshold"))}
     (fn [{:keys [type] :as td}]
       (let [ks (set (keys td))
             server-only   #{:prefix_padding_ms :silence_duration_ms :threshold}
