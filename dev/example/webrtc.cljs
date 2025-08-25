@@ -54,10 +54,31 @@
       (first items)
       items)))
 
+(defn render-usage!
+  "Render usage data for tokens and rate limits"
+  [{:keys [input-tokens output-tokens rate-limits]}]
+  (let [input-text         ($ "#input-tokens-text")
+        input-text-cached  ($ "#input-tokens-text-cached")
+        input-audio        ($ "#input-tokens-audio")
+        input-audio-cached ($ "#input-tokens-audio-cached")
+        output-text        ($ "#output-tokens-text")
+        output-audio       ($ "#output-tokens-audio")
+        limit              ($ "#rate-limits-limit")
+        remaining          ($ "#rate-limits-remaining")]
+    (set! (.-innerText input-text) (:text input-tokens))
+    (set! (.-innerText input-text-cached) (:text-cached input-tokens))
+    (set! (.-innerText input-audio) (:audio input-tokens))
+    (set! (.-innerText input-audio-cached) (:audio-cached input-tokens))
+    (set! (.-innerText output-text) (:text output-tokens))
+    (set! (.-innerText output-audio) (:audio output-tokens))
+    (set! (.-innerText limit) (:limit rate-limits))
+    (set! (.-innerText remaining) (:remaining rate-limits))))
+
 (defn render!
   "Cutting edge rendering technique using Real DOM ™ - the only thing better
   than Virtual DOM"
   [state & {:keys [btn text-group audio text]}]
+  (render-usage! state)
   (let [{:keys [fetching? active?]} state]
     (if fetching?
       (set! (.-disabled btn) true)
@@ -74,8 +95,32 @@
     (when (and (= "" (:text state)) (not (string/blank? (.-value text))))
       (set! (.-value text) ""))))
 
+(defn update-tokens
+  "Update token state based on the payload of the given response.done event"
+  [state {:keys [response]}]
+  (let [usage (:usage response)
+        input-token-details (:input_token_details usage)
+        cached-input-details (:cached_tokens_details input-token-details)
+        output-token-details (:output_token_details usage)]
+    (-> state
+        (update-in [:input-tokens :text] + (:text_tokens input-token-details))
+        (update-in [:input-tokens :text-cached] + (:text_tokens cached-input-details))
+        (update-in [:input-tokens :audio] + (:audio_tokens input-token-details))
+        (update-in [:input-tokens :audio-cached] + (:audio_tokens cached-input-details))
+        (update-in [:output-tokens :text] + (:text_tokens output-token-details))
+        (update-in [:output-tokens :audio] + (:audio_tokens output-token-details)))))
+
+(defn update-limits
+  "Update limit state based on the payload of the given rate_limits.updated event"
+  [state {:keys [rate_limits]}]
+  (if-some [tokens (first (filterv #(= "tokens" (:name %)) rate_limits))]
+    (-> (assoc-in state [:rate-limits :limit] (:limit tokens))
+        (assoc-in [:rate-limits :remaining] (:remaining tokens)))
+    state))
+
 (defn app
-  "State of the art browser application. Very reactive!"
+  "State of the art browser application. Very reactive! If we are using a text only modality, assume we want to immediately
+  create a response from a created conversation item (see condp for type conversation.item.created)"
   []
   (let [body        (.-body js/document)
         btn         ($ "#thebutton")
@@ -88,7 +133,15 @@
                      :session-ch (chan)
                      :active?    false
                      :fetching?  false
-                     :text       ""}]
+                     :text       ""
+                     :input-tokens {:text 0
+                                    :text-cached 0
+                                    :audio 0
+                                    :audio-cached 0}
+                     :output-tokens {:text 0
+                                     :audio 0}
+                     :rate-limits   {:limit 0
+                                     :remaining 0}}]
       (render! state :btn btn :text-group text-group :audio audio :text text)
       (cond
         (not (:mounted? state))
@@ -103,14 +156,20 @@
             session-ch ;;; Read server events from OpenAI
             (let [{:keys [type] :as ev} v]
               (println ev)
-              ;;; If we are using a text only modality, assume we want to immediately
-              ;;; create a response from a created conversation item
               (condp = type
-                "conversation.item.created" (when (= #{"text"} (:modalities state))
-                                              (put! session-ch {:type "response.create"
-                                                                :response {:modalities ["text"]}}))
-                nil)
-              (recur state))
+                "conversation.item.created"
+                (do (when (= #{"text"} (:modalities state))
+                      (put! session-ch {:type "response.create"
+                                        :response {:modalities ["text"]}}))
+                    (recur state))
+
+                "response.done"
+                (recur (update-tokens state ev))
+
+                "rate_limits.updated"
+                (recur (update-limits state ev))
+
+                (recur state)))
 
             event-ch
             (condp = (:type v)

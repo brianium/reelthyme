@@ -43,6 +43,43 @@
     </section>
     <section class="panel" id="session-settings">
     </section>
+    <table id="input-tokens">
+      <caption>Input Tokens</caption>
+      <tr>
+	<th>Text Tokens:</th>
+	<th>Text Tokens (Cached):</th>
+	<th>Audio Tokens:</th>
+	<th>Audio Tokens (Cached): </th>
+      </tr>
+      <tr>
+	<td id="input-tokens-text">0</td>
+	<td id="input-tokens-text-cached">0</td>
+	<td id="input-tokens-audio">0</td>
+	<td id="input-tokens-audio-cached">0</td>
+      </tr>
+    </table>
+    <table id="output-tokens">
+      <caption>Output Tokens</caption>
+      <tr>
+	<th>Text Tokens:</th>
+	<th>Audio Tokens:</th>
+      </tr>
+      <tr>
+	<td id="output-tokens-text">0</td>
+	<td id="output-tokens-audio">0</td>
+      </tr>
+    </table>
+    <table id="rate-limits">
+      <caption>Rate Limits (Tokens)</caption>
+      <tr>
+	<th>Limit: </th>
+	<th>Remaining: </th>
+      </tr>
+      <tr>
+	<td id="rate-limits-limit">0</td>
+	<td id="rate-limits-remaining">0</td>
+      </tr>
+    </table>
     <script src="cljs-out/dev-main.js" type="text/javascript"></script>
   </body>
 </html>

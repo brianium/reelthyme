@@ -81,3 +81,29 @@ button {
 	margin-top: 1rem;
     }
 }
+
+#input-tokens {
+    position: fixed;
+    top: 0;
+    right: 0;
+}
+
+#output-tokens {
+    position: fixed;
+    top: 160px;
+    right: 0;
+}
+
+#rate-limits {
+    position: fixed;
+    top: 320px;
+    right: 0;
+}
+
+table, th, td, caption {
+    border: 1px solid white;
+}
+
+th, td, caption {
+    padding: 0.5em;
+}
