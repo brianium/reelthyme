@@ -86,3 +86,44 @@
   (a/close! session-ch)
   )
 
+;;; Server Response Samples
+
+(def sample-response-done
+  {:type "response.done",
+   :event_id "event_C8R3K7zFQbnMWFSfwqRMS",
+   :response
+   {:voice "alloy",
+    :conversation_id "conv_C8R3JHAJYGsn7sQEB1RPc",
+    :output
+    [{:id "item_C8R3J2I5qVaw7ZupWCqDo",
+      :object "realtime.item",
+      :type "message",
+      :status "completed",
+      :role "assistant",
+      :content [{:type "audio", :transcript "¡Hola! ¿Qué tal?"}]}],
+    :usage
+    {:total_tokens 162,
+     :input_tokens 123,
+     :output_tokens 39,
+     :input_token_details
+     {:text_tokens 119,
+      :audio_tokens 4,
+      :image_tokens 0,
+      :cached_tokens 64,
+      :cached_tokens_details
+      {:text_tokens 64, :audio_tokens 0, :image_tokens 0}},
+     :output_token_details {:text_tokens 15, :audio_tokens 24}},
+    :output_audio_format "pcm16",
+    :status "completed",
+    :id "resp_C8R3JX7zFQKzJwJI7VmyA",
+    :modalities ["audio" "text"],
+    :max_output_tokens "inf",
+    :metadata nil,
+    :object "realtime.response",
+    :temperature 0.8,
+    :status_details nil}})
+
+(def sample-response-rate-limites-updated
+  {:type "rate_limits.updated"
+   :event_id "event_C8R3KFyNLdGwwH5JSnGmt"
+   :rate_limits [{:name "tokens", :limit 800000, :remaining 799467, :reset_seconds "0.039"}]})
