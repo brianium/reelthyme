@@ -1,7 +1,6 @@
 {:paths   ["src/clj" "src/cljc" "src/cljs"]
- :deps    {cheshire/cheshire                 {:mvn/version "6.0.0"}
-           metosin/malli                     {:mvn/version "0.17.0"}
-           org.clojure/core.async            {:mvn/version "1.8.741"}}
+ :deps    {com.cnuernber/charred  {:mvn/version "1.037"}
+           org.clojure/core.async {:mvn/version "1.8.741"}}
  :aliases {:dev {:extra-paths ["dev"]
                  :extra-deps  {org.clojure/tools.namespace {:mvn/version "1.5.0"}
                                org.clojure/clojure         {:mvn/version "1.12.0"}
