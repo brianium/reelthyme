@@ -3,7 +3,7 @@
   connect! will return a core.async channel suitable for the environment. Clojure on the JVM
   will use a websocket backed transport, while ClojureScript will use a WebRTC backed channel."
   (:require #?(:clj  [clojure.core.async :as a])
-            #?(:clj [cheshire.core :as json])
+            #?(:clj [charred.api :as json])
             #?(:clj  [reelthyme.transport.websocket :as ws]
                :cljs [reelthyme.transport.webrtc :as rtc])
             #?(:clj [reelthyme.audio.java :as audio]))
@@ -16,7 +16,7 @@
 #?(:clj
    (defn in->json
      [event]
-     {:text (json/generate-string event)})
+     {:text (json/write-json-str event)})
    :cljs
    (defn in->json
      [ev]
@@ -26,7 +26,7 @@
    (defn out->json
      "Likewise, lets get the server sent events as a Clojure map"
      [{:keys [text]}]
-     (json/parse-string text keyword))
+     (json/read-json text {:key-fn keyword}))
    :cljs
    (defn out->json
      [ev]
@@ -71,17 +71,16 @@
                      (map in->json))]
         (if-some [api-key (get params :api-key (System/getenv "OPENAI_API_KEY"))]
           (ws/websocket!
-           (get params :uri "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17")
+           (get params :uri "wss://api.openai.com/v1/realtime?model=gpt-realtime")
            (cond-> params
              (some? log-fn) (assoc :log log-fn)
              :always (merge {:builder-fn (fn [^WebSocket$Builder builder]
                                            (-> builder
-                                               (.header "Authorization" (str "Bearer " api-key))
-                                               (.header "OpenAI-Beta" "realtime=v1")))
+                                               (.header "Authorization" (str "Bearer " api-key))))
                              :xf-in      xf-in
                              :xf-out     xf-out
                              :ex-handler ex-handler})))
-          (throw (ex-info "OPENAI_API_KEY not found in environment" {:reason :no-key-provided}))))))
+          (throw (ex-info "api-key parameter not given or OPENAI_API_KEY not found in environment" {:reason :no-key-provided}))))))
    :cljs
    (defn connect!
      "Open an RTCPeerConnection with OpenAI. This channel type is intended for use in web applications. puts are sent
@@ -130,7 +129,7 @@
                  (stop-audio {:drain? true}))
              (let [{:keys [type]} event]
                (condp = type
-                 "response.audio.delta"
+                 "response.output_audio.delta"
                  (when (a/put! audio-ch event)
                    (recur))
 
@@ -166,11 +165,11 @@
      ([url params]
       (let [client (HttpClient/newHttpClient)
             uri    (URI/create url)
-            json-body (json/generate-string params)
+            json-body (json/write-json-str params)
             request (-> (HttpRequest/newBuilder uri)
                         (.header "Authorization" (str "Bearer " (System/getenv "OPENAI_API_KEY")))
                         (.header "Content-Type" "application/json")
                         (.POST (HttpRequest$BodyPublishers/ofString json-body))
                         (.build))
             response (.send client request (HttpResponse$BodyHandlers/ofString))]
-        (json/parse-string (.body response) keyword)))))
+        (json/read-json (.body response) {:key-fn keyword})))))

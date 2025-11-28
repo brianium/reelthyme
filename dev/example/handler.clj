@@ -1,20 +1,20 @@
 (ns example.handler
   (:require [reelthyme.core :as rt]
             [ring.util.response :refer [resource-response content-type]]
-            [cheshire.core :as json]))
+            [charred.api :as json]))
 
 (defn handle-session
   [req]
   (let [body (slurp (:body req))
-        data (json/parse-string body keyword)
+        data (json/read-json body {:key-fn keyword})
         sess (rt/create-session data)]
     (if (= "realtime.session" (:object sess))
       {:status 200
        :headers {"content-type" "application/json"}
-       :body    (json/generate-string sess)}
+       :body    (json/write-json-str sess)}
       {:status 500
        :headers {"content-type" "application/json"}
-       :body    (json/generate-string sess)})))
+       :body    (json/write-json-str sess)})))
 
 (defn handler [req]
   (let [uri (:uri req)]
