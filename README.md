@@ -44,16 +44,15 @@ Open a realtime session, with optional event validation:
   
 ;;; ClojureScript
 (def session-ch
-  (rt/connect! session {:xf-in (map sc/validate)})) ;;; session is fetched from a server
+  (rt/connect! client-secret {:xf-in (map sc/validate)})) ;;; client-secret is fetched from a server
 ```
 
-`reelthyme.core/create-session` is included as a convenient server-side function for creating sessions fit for WebRTC.
+`reelthyme.core/create-client-secret` is included as a convenient server-side function for creating client secrets fit for WebRTC.
 
 On the JVM, authentication can be provided as an `:api-key` option, or the default will attempt to use
-the `OPENAI_API_KEY` environment variable. WebRTC requires some work on your own server. See [Connection details](https://platform.openai.com/docs/guides/realtime#connect-with-webrtc) in the OpenAI WebRTC docs.
+the `OPENAI_API_KEY` environment variable. WebRTC requires some work on your own server. See [Connection details](https://platform.openai.com/docs/guides/realtime-webrtc#creating-an-ephemeral-token) in the OpenAI WebRTC docs.
 
-The `reelthyme.schema` namespace is completely optional. The `validate` function provided by it is a great
-addition to the development environment to ensure properly constructed client events are being sent.
+The `reelthyme.schema` namespace is completely optional and provides a malli compatible schema intended to aid development via instrumentation. See [example/validate.cljc](dev/example/validate.cljc) and [example/webrtc.cljs](dev/example/webrtc.cljs) for an example of dev instrumentation.
 
 ### 2. Stream Events
 
@@ -73,9 +72,9 @@ Or just read from the single session channel when using WebRTC:
 ```clojure
 ;;; Receive server events as plain Clojure maps
 (a/go-loop []
-    (when-let [ev (a/<! session-ch)]
-      (println "Server event:" ev)
-      (recur)))
+  (when-let [ev (a/<! session-ch)]
+    (println "Server event:" ev)
+    (recur)))
 ```
 
 ### 3. Send Messages
@@ -109,7 +108,7 @@ We must explicitly initiate audio capture in the JVM
 (stop-capture)
 ```
 
-WebRTC will initiate audio capture if the session is created with an "audio" modality. If "audio" is not one of the requested modalities (for some reason), a silent AudioContext will be used for the RTCPeerConnection (some form of audio context is required by OpenAI). WebRTC audio capture and playback are handled automatically based on the details of the session. There is no need to explicitly start capture or stop audio. Everything is automatically started when the channel conencts, and stopped when it is closed.
+WebRTC will initiate audio capture if the session is created with an "audio" output modality. If "audio" is not one of the requested modalities (for some reason), a silent AudioContext will be used for the RTCPeerConnection (some form of audio context is required by OpenAI). WebRTC audio capture and playback are handled automatically based on the details of the session. There is no need to explicitly start capture or stop audio. Everything is automatically started when the channel conencts, and stopped when it is closed.
 
 ## Example Workflow (JVM)
 
@@ -134,19 +133,13 @@ The ClojureScript version of connect! requires a session with an ephemeral clien
 (connect! params)
 
 ;;; ClojureScript
-(connect! session params)
+(connect! client-secret params)
 ```
 
 It should also be noted that browsers often impose restrictions on creating audio contexts of any kind without user interaction. This means that ClojureScript implementations will likely have to put connect! behind a user interaction (such as a click).
 
-Check out the [example ClojureScript application](dev/example/webrtc.cljs). It might also be helpful to see the [example handler](dev/example/handler.clj) used to create sessions.
-
-## Next Steps
-
-- Explore `reelthyme.schema` for built-in event validation.  
-- Customize transports and logging via `:xf-in`, `:xf-out`, `:ex-handler`, `:log-fn` options.  
-- Build responsive UIs or backends that react to real-time OpenAI events.
+Check out the [example ClojureScript application](dev/example/webrtc.cljs). It might also be helpful to see the [example handler](dev/example/handler.clj) used to create client secrets. See [OpenAI docs on creating client secrets](https://platform.openai.com/docs/api-reference/realtime-sessions/create-realtime-client-secret).
 
 ## Note on Acoustic Echo Cancellation:
 
-Acoustic Echo Cancellation (AEC) can be used to prevent awkward experiences where an agent hears itself and gets stuck in an infinite loop speaking to itself. AEC comes standard with WebRTC, so this issue should not surface when using it. If using the websocket transport on the JVM, you maybe have a better experience using a headset or disabling vads for a more "push to talk" approach.
+Acoustic Echo Cancellation (AEC) can be used to prevent awkward experiences where an agent hears itself and gets stuck in an infinite loop speaking to itself. AEC comes standard with WebRTC, so this issue should not surface when using it. If using the websocket transport on the JVM, you may have a better experience using a headset or disabling vads for a more "push to talk" approach.

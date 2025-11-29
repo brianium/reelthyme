@@ -21,7 +21,7 @@
       (loop []
         (when-let [{:keys [type delta]} (a/<!! audio-ch)]
           (case type
-            "response.audio.delta"
+            "response.output_audio.delta"
             (let [pcm (.decode b64 ^String delta)
                   len (alength pcm)]
               

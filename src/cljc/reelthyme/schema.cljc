@@ -1,63 +1,147 @@
 (ns reelthyme.schema
   "A schema for client events sent to OpenAI"
-  (:require [clojure.set :as set]
-            [malli.core :as m]
-            [malli.error :as me]))
+  (:require [clojure.set :as set]))
 
-;;; Client Events
-
-(def Function
-  [:map
+(def FunctionToolChoice
+  [:map {:closed true}
    [:type [:enum "function"]]
+   [:name :string]])
+
+(def FunctionTool
+  [:map {:closed true}
+   [:type [:enum "function"]]
+   [:description :string]
    [:name :string]
-   [:parameters {:description "A malli schema in vector format" :optional true} vector?]
-   [:description {:optional true} :string]])
+   [:parameters {:description "A JSON schema as a Clojure map"} map?]])
+
+(def MCPToolChoice
+  [:map {:closed true}
+   [:server_label :string]
+   [:type [:enum "mcp"]]
+   [:name :string]])
+
+(def ToolNames
+  [:and
+   [:vector {:min 1} :string]
+   [:fn (fn [tool-names]
+          (apply distinct? tool-names))]])
+
+(def MCPFilter
+  [:map {:closed true}
+   [:read_only :boolean]
+   [:tool_names ToolNames]])
+
+(def AllowedTools
+  [:orn
+   [:names ToolNames]
+   [:filter MCPFilter]])
+
+(def MCPRequireApproval
+  [:orn
+   [:string [:enum "always" "never"]]
+   [:filters
+    [:map {:closed true}
+     [:always {:optional true} MCPFilter]
+     [:never {:optional true} MCPFilter]]]])
+
+(def MCPTool
+  [:and
+   [:map {:closed true}
+    [:type [:enum "mcp"]]
+    [:server_label :string]
+    [:allowed_tools AllowedTools]
+    [:authorization :string]
+    [:connector_id {:optional true}
+     [:enum "connector_dropbox" "connector_gmail" "connector_googlecalendar" "connector_googledrive" "connector_microsoftteams" "connector_outlookcalendar" "connector_outlookemail" "connector_sharepoint"]]
+    [:headers {:optional true} [:map-of :string :string]]
+    [:require_approval MCPRequireApproval]
+    [:server_description {:optional true} :string]
+    [:server_url :string]]
+   [:fn (fn [tool]
+          (or (contains? tool :connector_id)
+              (contains? tool :server_url)))]])
+
+(def Tool
+  [:orn
+   [:function FunctionTool]
+   [:mcp MCPTool]])
 
 (def Voice
-  [:enum "alloy" "ash" "ballad" "coral" "echo" "fable" "onyx" "nova" "sage" "shimmer" "verse"])
-
-(def Role
-  [:enum "user" "assistant" "system"])
+  [:enum "alloy" "ash" "ballad" "coral" "echo" "sage" "shimmer" "verse" "marin" "cedar"])
 
 (def AudioFormat
-  [:enum "pcm16" "g711_ulaw" "g711_alaw"])
+  [:orn
+   [:pcm
+    [:map {:closed true}
+     [:rate [:enum 24000]]
+     [:type [:enum "audio/pcm"]]]]
+   [:pcmu
+    [:map {:closed true}
+     [:type [:enum "audio/pcmu"]]]]
+   [:pcma
+    [:map {:closed true}
+     [:type [:enum "audio/pcma"]]]]])
 
 (def InputAudioNoiseReduction
-  [:map
+  [:map {:closed true}
    [:type [:enum "near_field" "far_field"]]])
 
-(def InputAudioTranscription
-  [:map
+(def AudioInputTranscription
+  [:map {:closed true}
    [:language {:description "ISO-639-1 (e.g. en)" :optional true} :string]
-   [:model {:optional true} [:enum "gpt-4o-transcribe" "gpt-4o-mini-transcribe" "whisper-1"]]
+   [:model {:optional true} [:enum "whisper-1" "gpt-4o-mini-transcribe" "gpt-4o-transcribe" "gpt-4o-transcribe-diarize"]]
    [:prompt {:optional true} :string]])
 
-(def TurnDetection
-  [:and
-   [:map
-    [:create_response {:optional true} :boolean]
-    [:eagerness {:optional true} [:enum "low" "medium" "high" "auto"]]
-    [:interrupt_response {:optional true} :boolean]
-    [:prefix_padding_ms {:optional true} :int]
-    [:silence_duration_ms {:optional true} :int]
-    [:threshold {:optional true} number?]
-    [:type [:enum "semantic_vad" "server_vad"]]]
-   [:fn {:error/fn (fn [{:keys [value]} _]
-                     (if (= "semantic_vad" (:type value))
-                       "semantic_vad only allows settings: eagerness"
-                       "server_vad only allows settings: prefix_padding_ms, silence_duration_ms, threshold"))}
-    (fn [{:keys [type] :as td}]
-      (let [ks (set (keys td))
-            server-only   #{:prefix_padding_ms :silence_duration_ms :threshold}
-            semantic-only #{:eagerness}]
-        (if (= type "semantic_vad")
-          (= 0 (count (set/intersection server-only ks)))
-          (= 0 (count (set/intersection semantic-only ks))))))]])
+(def ServerVAD
+  [:map {:closed true}
+   [:type [:enum "server_vad"]]
+   [:create_response {:optional true} :boolean]
+   [:idle_timeout_ms {:optional true} :int]
+   [:interrupt_response {:optional true} :boolean]
+   [:prefix_padding_ms {:optional true} :int]
+   [:silence_duration_ms {:optional true} :int]
+   [:threshold {:optional true} number?]])
 
-(def MaxResponseOutputTokens
+(def SemanticVAD
+  [:map {:closed true}
+   [:type [:enum "semantic_vad"]]
+   [:create_response {:optional true} :boolean]
+   [:eagerness {:optional true} [:enum "low" "medium" "high" "auto"]]
+   [:interrupt_response {:optional true} :boolean]])
+
+(def TurnDetection
+  [:orn
+   [:server-vad ServerVAD]
+   [:semantic-vad SemanticVAD]])
+
+(def AudioInput
+  [:map {:closed true}
+   [:format {:optional true} AudioFormat]
+   [:noise_reduction {:optional true} [:maybe InputAudioNoiseReduction]]
+   [:transcription {:optional true} [:maybe AudioInputTranscription]]
+   [:turn_detection {:optional true} [:maybe TurnDetection]]])
+
+(def AudioOutput
+  [:map {:closed true}
+   [:format {:optional true} AudioFormat]
+   [:speed {:optional true :min 0.25 :max 1.5} :double]
+   [:voice Voice]])
+
+(def Audio
+  [:map {:closed true}
+   [:input {:optional true} AudioInput]
+   [:output {:optional true} AudioOutput]])
+
+(def Include
+  [:and
+   [:vector {:min 1} [:enum "item.input_audio_transcription.logprobs"]]
+   [:fn (fn [include]
+          (apply distinct? include))]])
+
+(def MaxOutputTokens
   [:or :int [:enum "inf"]])
 
-(def Modalities
+(def OutputModalities
   [:and
    [:vector {:min 1 :max 2} [:enum "audio" "text"]]
    [:fn {:error/message "Can be [\"audio\", \"text\"] or [\"text\"]"}
@@ -66,94 +150,192 @@
        (not= ["audio"] items)
        (= (count items) (count (set items)))))]])
 
+(def Prompt
+  [:map {:closed true}
+   [:id :string]
+   [:variables {:optional true} [:map-of :keyword :any]]
+   [:version {:optional true} :string]])
+
 (def ToolChoice
   [:or
    [:enum "auto" "none" "required"]
-   Function])
+   FunctionToolChoice
+   MCPToolChoice])
+
+(def RealtimeSession
+  [:map {:closed true}
+   [:type [:enum "realtime"]]
+   [:audio {:optional true} Audio]
+   [:include {:optional true} Include]
+   [:instructions {:optional true} :string]
+   [:max_output_tokens {:optional true} MaxOutputTokens]
+   [:model {:optional true} :string]
+   [:output_modalities {:optional true} OutputModalities]
+   [:prompt {:optional true} Prompt]
+   [:tool_choice {:optional true} ToolChoice]
+   [:tools {:optional true} [:vector Tool]]])
+
+(def TranscriptionSession
+  [:map {:closed true}
+   [:type [:enum "transcription"]]
+   [:audio {:optional true} AudioInput]
+   [:include {:optional true} Include]])
 
 (def Session
-  [:map
-   [:input_audio_format {:optional true} AudioFormat]
-   [:input_audio_noise_reduction {:optional true} InputAudioNoiseReduction]
-   [:input_audio_transcription {:optional true} InputAudioTranscription]
-   [:instructions {:optional true} :string]
-   [:max_response_output_tokens {:optional true} MaxResponseOutputTokens]
-   [:modalities {:optional true} Modalities]
-   [:model {:optional true} :string]
-   [:output_audio_format {:optional true} AudioFormat]
-   [:temperature {:optional true} number?]
-   [:tool_choice {:optional true} ToolChoice]
-   [:tools {:optional true} [:vector Function]]
-   [:turn_detection {:optional true} [:maybe TurnDetection]]
-   [:voice {:optional true} Voice]])
+  [:orn
+   [:realtime RealtimeSession]
+   [:transcription TranscriptionSession]])
 
-(def Message
+;; Client Events
+
+(def SystemContent
+  [:map {:closed true}
+   [:text :string]
+   [:type [:enum "input_text"]]])
+
+(def UserContent
   [:and
-   [:map
+   [:map {:closed true}
     [:audio {:optional true} :string]
-    [:id {:optional true} :string]
+    [:detail {:optional true} [:enum "auto" "high" "low"]]
+    [:image_url {:optional true} :string]
     [:text {:optional true} :string]
     [:transcript {:optional true} :string]
-    [:type [:enum "input_text" "input_audio" "item_reference" "text"]]]
+    [:type [:enum "input_text" "input_audio" "input_image"]]]
    [:fn {:error/fn (fn [{:keys [value]} _]
                      (str "Invalid parameters for message of type: " (:type value)))}
-    (fn [{:keys [audio id text transcript type]}]
+    (fn [{:keys [audio text transcript type image_url]}]
       (condp = type
         "input_text"     (some? text)
-        "text"           (some? text)
         "input_audio"    (and (some? audio) (some? transcript))
-        "item_reference" (some? id)
+        "input_image"    (some? image_url)
         false))]])
 
-(def ConversationItem
+(def AssistantContent
+  [:and
+   [:map {:closed true}
+    [:audio {:optional true} :string]
+    [:text {:optional true} :string]
+    [:transcript {:optional true} :string]
+    [:type [:enum "output_text" "output_audio"]]]
+   [:fn {:error/fn (fn [{:keys [value]} _]
+                     (str "Invalid parameters for message of type: " (:type value)))}
+    (fn [{:keys [audio text transcript type]}]
+      (condp = type
+        "output_text" (some? text)
+        "output_audio" (and (some? transcript) (some? audio))
+        false))]])
+
+(def MessageItem
   [:and
    [:map
-    [:arguments {:optional true} :string]
-    [:call_id {:optional true} :string]
-    [:content {:optional true} [:vector Message]]
     [:id {:optional true} :string]
-    [:role Role]
-    [:object {:optional true} [:enum "realtime.item"]]
-    [:status {:optional true} [:enum "completed" "incomplete"]]
-    [:type [:enum "message" "function_call" "function_call_output"]]]
-   [:fn {:error/fn (fn [{:keys [value]} _]
-                     (condp = (:type value)
-                       "message" "message only allows: content"
-                       "function_call" "function_call only allows: arguments, name"
-                       "function_call_output only allows: output"))}
-    (fn [{:keys [type] :as ci}]
-      (let [ks (set (keys ci))
-            message       #{:content}
-            function-call #{:arguments :name}
-            function-call-output #{:output}]
-        (cond
-          (= "function_call" type)        (= 0 (count (set/intersection function-call-output message ks)))
-          (= "function_call_output" type) (= 0 (count (set/intersection function-call message ks)))
-          :else                           (= 0 (count (set/intersection function-call function-call-output ks))))))]])
+    [:object {:optional true} :string]
+    [:status {:optional true} :string]
+    [:type [:= "message"]]
+    [:role [:enum "user" "assistant" "system"]]]
+   [:multi {:dispatch :role}
+    ["user" [:map [:content [:vector UserContent]]]]
+    ["assistant" [:map [:content [:vector AssistantContent]]]]
+    ["system" [:map [:content [:vector SystemContent]]]]]
+   [:fn {:error/message "MessageItem is closed"}
+    (fn [item]
+      (let [expected-ks #{:id :object :status :type :role :content}
+            actual-ks (-> item keys set)]
+        (= #{} (set/difference actual-ks expected-ks))))]])
+
+(def FunctionCallItem
+  [:map {:closed true}
+   [:id {:optional true} :string]
+   [:object {:optional true} :string]
+   [:status {:optional true} :string]
+   [:arguments :string]
+   [:name :string]
+   [:type [:= "function_call"]]
+   [:call_id :string]])
+
+(def FunctionCallOutputItem
+  [:map {:closed true}
+   [:id {:optional true} :string]
+   [:object {:optional true} :string]
+   [:status {:optional true} :string]
+   [:call_id :string]
+   [:output :string]
+   [:type [:= "function_call_output"]]])
+
+(def MCPApprovalRequestItem
+  [:map {:closed true}
+   [:arguments :string]
+   [:id :string]
+   [:name :string]
+   [:server_label :string]
+   [:type [:= "mcp_approval_request"]]])
+
+(def MCPApprovalResponseItem
+  [:map {:closed true}
+   [:approval_request_id :string]
+   [:approve :boolean]
+   [:id :string]
+   [:type [:= "mcp_approval_response"]]
+   [:reason {:optional true} :string]])
+
+(def MCPListToolsItem
+  [:map {:closed true}
+   [:server_label :string]
+   [:type [:= "mcp_list_tools"]]
+   [:id :string]
+   [:tools
+    [:vector
+     [:map {:closed true}
+      [:input_schema
+       [:or [:map-of :keyword :string]
+        [:map-of :string :string]]]
+      [:name :string]
+      [:annotations {:optional true}
+       [:or [:map-of :keyword :string]
+        [:map-of :string :string]]]
+      [:description :string]]]]])
+
+(def MCPToolCallItem
+  [:map {:closed true}
+   [:arguments :string]
+   [:id :string]
+   [:name :string]
+   [:server_label :string]
+   [:type [:= "mcp_call"]]
+   [:approval_request_id :string]
+   [:error {:optional true}
+    [:map {:closed true}
+     [:code {:optional true} :int]
+     [:message :string]
+     [:type :string]]]
+   [:output :string]])
+
+(def ConversationItem
+  [:multi {:dispatch :type}
+   ["message" MessageItem]
+   ["function_call" FunctionCallItem]
+   ["function_call_output" FunctionCallOutputItem]
+   ["mcp_approval_request" MCPApprovalRequestItem]
+   ["mcp_approval_response" MCPApprovalResponseItem]
+   ["mcp_list_tools" MCPListToolsItem]
+   ["mcp_call" MCPToolCallItem]])
 
 (def Response
-  [:map
+  [:map {:closed true}
+   [:audio {:optional true}
+    [:map {:closed true}
+     [:output AudioOutput]]]
    [:conversation {:optional true} [:enum "none" "auto"]]
    [:input {:optional true} [:vector ConversationItem]]
    [:instructions {:optional true} :string]
-   [:max_response_output_tokens {:optional true} MaxResponseOutputTokens]
-   [:metadata {:optional true} map?]
-   [:modalities {:optional true} Modalities]
-   [:output_audio_format {:optional true} AudioFormat]
-   [:temperature {:optional true} number?]
+   [:max_response_output_tokens {:optional true} MaxOutputTokens]
+   [:metadata {:optional true} [:or [:map-of :string :string]
+                                [:map-of :keyword :string]]]
+   [:output_modalities {:optional true} [:or [:tuple [:= "audio"]] [:tuple [:= "text"]]]]
+   [:prompt {:optional true} Prompt]
    [:tool_choice {:optional true} ToolChoice]
-   [:tools {:optional true} [:vector Function]]
-   [:voice {:optional true} Voice]])
-
-(def TranscriptionSession
-  [:map
-   [:input_audio_format {:optional true} AudioFormat]
-   [:input_audio_noise_reduction {:optional true} InputAudioNoiseReduction]
-   [:input_audio_transcription {:optional true} InputAudioTranscription]
-   [:modalities {:optional true} Modalities]
-   [:turn_detection {:optional true} [:maybe TurnDetection]]])
-
-;;; Client Events
+   [:tools {:optional true} [:vector Tool]]])
 
 (def SessionUpdate
   [:map
@@ -216,12 +398,6 @@
    [:event_id {:optional true} :string]
    [:type [:enum "input_audio_buffer.clear"]]])
 
-(def TranscriptionSessionUpdate
-  [:map
-   [:event_id {:optional true} :string]
-   [:type [:enum "transcription_session.update"]]
-   [:session TranscriptionSession]])
-
 ;;; output_audio_buffer.clear is WebRTC only
 (def OutputAudioBufferClear
   [:map
@@ -240,15 +416,11 @@
    ["conversation.item.retrieve" ConversationItemRetrieve]
    ["conversation.item.truncate" ConversationItemTruncate]
    ["conversation.item.delete" ConversationItemDelete]
-   ["transcription_session.update" TranscriptionSessionUpdate]
    ["output_audio_buffer.clear" OutputAudioBufferClear]])
 
-(defn validate
-  "Validate the given client event. Returns if valid, otherwise throws an ex-info
-  containing the humanized explanation and the event that was given. Should probably
-  be used in development only"
-  [event]
-  (if-some [explain (m/explain ClientEvent event)]
-    (throw (ex-info "Invalid client event given" {:humanized (me/humanize explain)
-                                                  :event     event}))
-    event))
+;; Session Creation (server side for client secrets)
+
+(def ExpiresAfter
+  [:map {:closed true}
+   [:anchor {:optional true} [:enum "created_at"]]
+   [:seconds {:min 10 :max 7200} :int]])
