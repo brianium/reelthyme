@@ -1,23 +1,23 @@
 (ns example.webrtc
   "An example app for using a WebRTC backed channel"
-  (:require [clojure.string :as string]
-            [reelthyme.core :as rt]
-            [reelthyme.schema :as sch]
-            [cljs.core.async :as a :refer [go go-loop chan put! <!]]
-            [cljs.core.async.interop :refer-macros [<p!]]))
+  (:require [cljs.core.async :as a :refer [chan put! <!] :refer-macros [go go-loop]]
+            [cljs.core.async.interop :refer-macros [<p!]]
+            [clojure.string :as string]
+            [example.validate :as vld]
+            [reelthyme.core :as rt]))
 
 (enable-console-print!)
 
-(defn fetch-session
+(defn fetch-client-secret
   "See dev/example/handler.clj for the server side implementation. Nothing terribly fancy here -
   just getting a session (with an ephemeral client secret) via POST https://api.openai.com/v1/realtime/sessions. This is needed to connect!"
   ([]
-   (fetch-session nil))
+   (fetch-client-secret nil))
   ([params]
    (let [result-ch (chan)
          params' (clj->js params)]
      (go
-       (let [res  (<p! (js/fetch "/session"
+       (let [res  (<p! (js/fetch "/client-secret"
                                  (clj->js (cond-> {:method "post"}
                                             (some? params)
                                             (assoc :body (.stringify js/JSON params'))))))
@@ -39,6 +39,9 @@
   [e event-ch]
   (let [target (.-target e)]
     (cond
+      (.matches target "input[name=\"content_type\"]")
+      (put! event-ch {:type :update-content-type :value (.-value target)})
+      
       (.matches target "input[name=\"modalities\"]")
       (put! event-ch {:type :update-modality :checked (.-checked target) :value (.-value target)})
 
@@ -77,7 +80,7 @@
 (defn render!
   "Cutting edge rendering technique using Real DOM ™ - the only thing better
   than Virtual DOM"
-  [state & {:keys [btn text-group audio text]}]
+  [state & {:keys [btn text-group content-types modalities text]}]
   (render-usage! state)
   (let [{:keys [fetching? active?]} state]
     (if fetching?
@@ -85,11 +88,17 @@
       (set! (.-disabled btn) false))
     (if active?
       (do
-        (set! (.-disabled audio) true)
+        (doseq [input modalities]
+          (set! (.-disabled input) true))
+        (doseq [input content-types]
+          (set! (.-disabled input) true))
         (set! (.-innerText btn) "No Mo Reelthyme")
         (.add (.-classList text-group) "visible"))
       (do
-        (set! (.-disabled audio) false)
+        (doseq [input modalities]
+          (set! (.-disabled input) false))
+        (doseq [input content-types]
+          (set! (.-disabled input) false))
         (set! (.-innerText btn) "Commence Reelthyme")
         (.remove (.-classList text-group) "visible")))
     (when (and (= "" (:text state)) (not (string/blank? (.-value text))))
@@ -122,14 +131,18 @@
   "State of the art browser application. Very reactive! If we are using a text only modality, assume we want to immediately
   create a response from a created conversation item (see condp for type conversation.item.created)"
   []
-  (let [body        (.-body js/document)
-        btn         ($ "#thebutton")
-        text-group  ($ "#text-group")
-        text        ($ "#text")
-        audio       ($ "#modality-audio")
-        event-ch    (chan)]
+  (let [body          (.-body js/document)
+        btn           ($ "#thebutton")
+        text-group    ($ "#text-group")
+        text          ($ "#text")
+        modalities    ($ "input[name=\"modalities\"]")
+        content-types ($ "input[name=\"content_type\"]")
+        event-ch      (chan)]
     (go-loop [state {:mounted?   false
-                     :modalities #{"text"}
+                     :type       "realtime"
+                     :model      "gpt-realtime" ;; omitting this results in a really bizarre empty error where all keys have empty values
+                     :content-types #{"input_text"}
+                     :output_modalities ["text"]
                      :session-ch (chan)
                      :active?    false
                      :fetching?  false
@@ -142,7 +155,7 @@
                                      :audio 0}
                      :rate-limits   {:limit 0
                                      :remaining 0}}]
-      (render! state :btn btn :text-group text-group :audio audio :text text)
+      (render! state :btn btn :text-group text-group :content-types content-types :modalities modalities :text text)
       (cond
         (not (:mounted? state))
         (do (.addEventListener body "click" #(dispatch-click % event-ch))
@@ -157,10 +170,10 @@
             (let [{:keys [type] :as ev} v]
               (println ev)
               (condp = type
-                "conversation.item.created"
-                (do (when (= #{"text"} (:modalities state))
+                "conversation.item.added"
+                (do (when (= #{"input_text"} (:content-types state))
                       (put! session-ch {:type "response.create"
-                                        :response {:modalities ["text"]}}))
+                                        :response {:output_modalities (:output_modalities state)}}))
                     (recur state))
 
                 "response.done"
@@ -184,18 +197,21 @@
               :toggle-session
               (if-not (:active? state)
                 (do
-                  (put! event-ch {:type :session-created
-                                  :session (<! (fetch-session (select-keys state [:modalities])))})
+                  (put! event-ch {:type :secret-created
+                                  :client-secret (<! (fetch-client-secret (select-keys state [:output_modalities :type :model])))})
                   (recur (assoc state :fetching? true)))
                 (do
                   (a/close! session-ch)
                   (recur (assoc state :session-ch (chan) :active? false))))
-              :session-created
-              (let [session-ch (rt/connect! (:session v) {:xf-in (map sch/validate)})]
+              :secret-created
+              (let [session-ch (rt/connect! (:client-secret v) {:xf-in (map vld/validate) :content-types (:content-types state)})]
                 (recur (assoc state :fetching? false :session-ch session-ch :active? true)))
+              :update-content-type
+              (let [{:keys [value]} v]
+                (recur (assoc state :content-types #{value})))
               :update-modality
-              (let [{:keys [checked value]} v]
-                (recur (update state :modalities (if checked conj disj) value)))
+              (let [{:keys [value]} v]
+                (recur (assoc state :output_modalities [value])))
               :update-text
               (let [{:keys [value]} v]
                 (recur (assoc state :text value))))))))))

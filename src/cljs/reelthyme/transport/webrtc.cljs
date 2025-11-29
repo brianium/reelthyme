@@ -69,11 +69,12 @@
   "Return a channel backed by an RTCPeerConnection. puts are sent of the connection's
   data channel and takes are received on it. Closing the channel will close all audio
   tracks attached to the connection, as well as the connection itself"
-  ([session]
-   (connect! session {}))
-  ([session {:keys [buffer xf-out ex-handler xf-in] :or {buffer 10}}]
-   (let [ephemeral-key (get-in session [:client_secret :value])
-         audio?        (some? ((set (:modalities session)) "audio"))
+  ([client-secret]
+   (connect! client-secret {}))
+  ([client-secret {:keys [buffer xf-out ex-handler xf-in content-types] :or {buffer 10 content-types #{"input_audio" "input_text"}}}]
+   (let [session       (:session client-secret)
+         ephemeral-key (:value client-secret)
+         audio?        (some? ((set (:output_modalities session)) "audio"))
          in-ch         (chan buffer xf-in)
          out-ch        (chan buffer xf-out ex-handler)
          pc            (js/RTCPeerConnection.)
@@ -97,11 +98,11 @@
 
      ;;; Start the session using the Session Description Protocol (SDP)
      (go
-       (let [track (<! (add-audio-track! {:silent? (not audio?)}))
+       (let [track (<! (add-audio-track! {:silent? (not (contains? content-types "input_audio"))}))
              _     (.addTrack pc track)
              offer (<p! (.createOffer pc))
              _     (<p! (.setLocalDescription pc offer))
-             url   (str "https://api.openai.com/v1/realtime?model=" (:model session))
+             url   "https://api.openai.com/v1/realtime/calls"
              res   (<p! (js/fetch url #js{:method "post"
                                           :body   (.-sdp offer)
                                           :headers

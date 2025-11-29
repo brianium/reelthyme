@@ -1,3 +1,4 @@
 ^{:css-dirs ["resources/public/css"]
+  :watch-dirs ["src/cljs" "dev/example"]
   :ring-handler example.handler/handler}
 {:main example.webrtc}

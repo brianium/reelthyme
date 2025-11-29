@@ -18,15 +18,28 @@
       <form>
 	<div class="form-group">
 	  <p>
-	    Modalities:
+	    Output Modalities:
 	  </p>
 	  <label for="modality-audio">
-	    audio (requests mic access)
-	    <input type="checkbox" name="modalities" value="audio" id="modality-audio" />
+	    audio
+	    <input type="radio" name="modalities" value="audio" id="modality-audio" />
 	  </label>
 	  <label for="modality-text">
-	    text (required)
-	    <input type="checkbox" name="modalities" value="text" id="modality-text" checked disabled />
+	    text
+	    <input type="radio" name="modalities" value="text" id="modality-text" checked />
+	  </label>
+	</div>
+	<div class="form-group">
+	  <p>
+	    Content Type
+	  </p>
+	  <label for="content-audio">
+	    audio (requests mic access)
+	    <input type="radio" name="content_type" value="input_audio" id="content-audio" />
+	  </label>
+	  <label for="content-text">
+	    text
+	    <input type="radio" name="content_type" value="input_text" id="content-text" checked />
 	  </label>
 	</div>
 	<button id="thebutton" type="button">

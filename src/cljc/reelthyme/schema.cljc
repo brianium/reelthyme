@@ -235,9 +235,9 @@
     [:type [:= "message"]]
     [:role [:enum "user" "assistant" "system"]]]
    [:multi {:dispatch :role}
-    ["user" [:map [:content UserContent]]]
-    ["assistant" [:map [:content AssistantContent]]]
-    ["system" [:map [:content SystemContent]]]]
+    ["user" [:map [:content [:vector UserContent]]]]
+    ["assistant" [:map [:content [:vector AssistantContent]]]]
+    ["system" [:map [:content [:vector SystemContent]]]]]
    [:fn {:error/message "MessageItem is closed"}
     (fn [item]
       (let [expected-ks #{:id :object :status :type :role :content}
@@ -417,3 +417,10 @@
    ["conversation.item.truncate" ConversationItemTruncate]
    ["conversation.item.delete" ConversationItemDelete]
    ["output_audio_buffer.clear" OutputAudioBufferClear]])
+
+;; Session Creation (server side for client secrets)
+
+(def ExpiresAfter
+  [:map {:closed true}
+   [:anchor {:optional true} [:enum "created_at"]]
+   [:seconds {:min 10 :max 7200} :int]])
