@@ -93,11 +93,12 @@
      Note: The :content-types param is unique to the ClojureScript version. It is used to control whhich user media to ask permission for.
 
      Params:
-     :buffer        - (optional) buffer size for the channel - defaults to 10
-     :content-types - (optional) [:vector [:enum \"input_text\" \"input_audio\"]] - one or more content types provided by the user - defaults to #{\"input_audio\" \"input_text\"}
-     :xf-out        - (optional) A transducer that will be applied to all outputs. Note: this xf will be applied AFTER filtering and json serialization
-     :ex-handler    - (optional) An ex-handler for the output channel. Generally pairs with :xf - follows the same rules as clojure.core.async/chan
-     :xf-in         - (optional) A transducer that will be applied to every input value BEFORE json serialization. Should return an event map or throw.
+     :buffer             - (optional) buffer size for the channel - defaults to 10
+     :content-types      - (optional) [:vector [:enum \"input_text\" \"input_audio\"]] - one or more content types provided by the user - defaults to #{\"input_audio\" \"input_text\"}
+     :media-stream-track - (optional) An instance of MediaStreamTrack - this supersedes :content-types. Useful for custom permission scenarios (i.e calling navigator.mediaDevices.getUserMedia() in advance)
+     :xf-out             - (optional) A transducer that will be applied to all outputs. Note: this xf will be applied AFTER filtering and json serialization
+     :ex-handler         - (optional) An ex-handler for the output channel. Generally pairs with :xf - follows the same rules as clojure.core.async/chan
+     :xf-in              - (optional) A transducer that will be applied to every input value BEFORE json serialization. Should return an event map or throw.
                               No ex-handler is supported for inputs."
      [client-secret {:keys [xf-in xf-out] :as params}]
      (let [xf-in (if xf-in
