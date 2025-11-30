@@ -1,5 +1,23 @@
 # Change Log
 
+## [2025.11.30.1359] - 2025-11-30
+
+### Added
+
+**ClojureScript Only**
+
+A `:media-stream-track` param is now supported. Supersedes `:content-types` if provided. Useful for workflows
+requiring more nuanced permission flows - for example calling `navigator.mediaDevices.getUserMedia()` manually
+and then connecting only after permission is granted.
+
+```clojure
+(connect! client-secret-from-server {:media-stream-strack (custom-get-media-stream-track-some-how)})
+```
+
+### Changed
+
+Demo now includes a checkbox for testing manual provision of a `MediaStreamTrack`
+
 ## [2025.11.29.1007] - 2025-11-29
 
 ### Changed

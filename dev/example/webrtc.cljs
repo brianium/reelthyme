@@ -1,4 +1,4 @@
-(ns example.webrtc
+(ns ^:figwheel-hooks example.webrtc
   "An example app for using a WebRTC backed channel"
   (:require [cljs.core.async :as a :refer [chan put! <!] :refer-macros [go go-loop]]
             [cljs.core.async.interop :refer-macros [<p!]]
@@ -44,6 +44,9 @@
       
       (.matches target "input[name=\"modalities\"]")
       (put! event-ch {:type :update-modality :checked (.-checked target) :value (.-value target)})
+
+      (.matches target "input[name=\"track\"]")
+      (put! event-ch {:type :update-custom-track :checked (.-checked target)})
 
       (.matches target "#text")
       (put! event-ch {:type :update-text :value (.-value target)}))
@@ -137,8 +140,10 @@
         text          ($ "#text")
         modalities    ($ "input[name=\"modalities\"]")
         content-types ($ "input[name=\"content_type\"]")
-        event-ch      (chan)]
+        event-ch      (chan)
+        kill-ch       (chan)]
     (go-loop [state {:mounted?   false
+                     :custom-track? false
                      :type       "realtime"
                      :model      "gpt-realtime" ;; omitting this results in a really bizarre empty error where all keys have empty values
                      :content-types #{"input_text"}
@@ -164,8 +169,11 @@
 
         :else
         (let [session-ch (:session-ch state)
-              [v p] (a/alts! [event-ch session-ch])]
+              [v p] (a/alts! [event-ch session-ch kill-ch])]
           (condp = p
+            kill-ch
+            (do "nothing")
+
             session-ch ;;; Read server events from OpenAI
             (let [{:keys [type] :as ev} v]
               (println ev)
@@ -204,7 +212,18 @@
                   (a/close! session-ch)
                   (recur (assoc state :session-ch (chan) :active? false))))
               :secret-created
-              (let [session-ch (rt/connect! (:client-secret v) {:xf-in (map vld/validate) :content-types (:content-types state)})]
+              (let [session-ch
+                    (rt/connect!
+                     (:client-secret v)
+                     (cond-> {:xf-in         (map vld/validate)
+                              :content-types (:content-types state)}
+                       (:custom-track? state)
+                       (assoc
+                        :media-stream-track
+                        (let [stream (<p! (.getUserMedia js/navigator.mediaDevices #js {:audio true}))
+                              track  (aget (.getAudioTracks stream) 0)]
+                          (println "Using custom track")
+                          track))))]
                 (recur (assoc state :fetching? false :session-ch session-ch :active? true)))
               :update-content-type
               (let [{:keys [value]} v]
@@ -212,8 +231,19 @@
               :update-modality
               (let [{:keys [value]} v]
                 (recur (assoc state :output_modalities [value])))
+              :update-custom-track
+              (let [{:keys [checked]} v]
+                (recur (assoc state :custom-track? checked)))
               :update-text
               (let [{:keys [value]} v]
-                (recur (assoc state :text value))))))))))
+                (recur (assoc state :text value))))))))
+    kill-ch))
 
-(app)
+(defonce *app (atom (app)))
+
+(defn ^:after-load after-load
+  []
+  (when-some [kill-ch @*app]
+    (println "Reinitializing application")
+    (put! kill-ch :done)
+    (reset! *app (app))))

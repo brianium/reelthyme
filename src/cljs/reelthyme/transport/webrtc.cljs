@@ -46,14 +46,20 @@
 (defn add-audio-track!
   "sdp offer expects one audio track - we can use a silent track
    if a text only modality is requested, however infrequent"
-  [{:keys [silent?]}]
+  [{:keys [silent? media-stream-track]}]
   (let [done (chan)]
-    (if silent?
+    (cond
+      (some? media-stream-track)
+      (put! done media-stream-track)
+      
+      silent?
       (let [ctx (js/AudioContext.)
             dst (.createMediaStreamDestination ctx)
             stream (.-stream dst)
             track (aget (.getAudioTracks stream) 0)]
         (put! done track))
+      
+      :else
       (go
         (let [stream (<p! (.getUserMedia js/navigator.mediaDevices #js {:audio true}))
               track  (aget (.getAudioTracks stream) 0)]
@@ -71,7 +77,9 @@
   tracks attached to the connection, as well as the connection itself"
   ([client-secret]
    (connect! client-secret {}))
-  ([client-secret {:keys [buffer xf-out ex-handler xf-in content-types] :or {buffer 10 content-types #{"input_audio" "input_text"}}}]
+  ([client-secret {:keys [buffer xf-out ex-handler xf-in content-types media-stream-track]
+                   :or   {buffer        10
+                          content-types #{"input_audio" "input_text"}}}]
    (let [session       (:session client-secret)
          ephemeral-key (:value client-secret)
          audio?        (some? ((set (:output_modalities session)) "audio"))
@@ -98,7 +106,8 @@
 
      ;;; Start the session using the Session Description Protocol (SDP)
      (go
-       (let [track (<! (add-audio-track! {:silent? (not (contains? content-types "input_audio"))}))
+       (let [track (<! (add-audio-track! {:media-stream-track media-stream-track
+                                          :silent?            (not (contains? content-types "input_audio"))}))
              _     (.addTrack pc track)
              offer (<p! (.createOffer pc))
              _     (<p! (.setLocalDescription pc offer))

@@ -108,7 +108,35 @@ We must explicitly initiate audio capture in the JVM
 (stop-capture)
 ```
 
-WebRTC will initiate audio capture if the session is created with an "audio" output modality. If "audio" is not one of the requested modalities (for some reason), a silent AudioContext will be used for the RTCPeerConnection (some form of audio context is required by OpenAI). WebRTC audio capture and playback are handled automatically based on the details of the session. There is no need to explicitly start capture or stop audio. Everything is automatically started when the channel conencts, and stopped when it is closed.
+The ClojureScript version of `connect!` behaves a little differently because browser permissions are a bit more nuanced.
+
+The `:content-types` param is a set that hints at the expected values belonging to the `[:content :type]` property of messages in a session.
+It defaults to `#{"input_audio" "input_text"}` (supporting both audio and text inputs)
+
+#### Method 1 - Begin capture on connect! automatically
+
+``` clojure
+(connect! client-secret) ;; Microphone access requested by default when connect! is called
+(connect! client-secret {:content-types #{"input_audio"}}) ;; anticipate only audio input
+```
+
+If `:conntent-types` contains `"input_audio"` at all, the end user will be prompted for mic access automatically when `connect!` is called.
+
+#### Method 2 - Manually provide a MediaStreamTrack
+
+This method is useful if you want more control over getting access to user media. For example you may want play a ringtone or log some feedback before
+calling `navigator.mediaDevices.getUserMedia()`.
+
+``` clojure
+(go
+  (let [stream (<p! (.getUserMedia js/navigator.mediaDevices #js {:audio true}))
+        track  (aget (.getAudioTracks stream) 0)]
+    (connect! client-secret {:media-stream-track track})))
+```
+
+#### Text input AND output
+
+It is possible to use text for input AND output by setting `:content-types` to `#{"input_text"}`.
 
 ## Example Workflow (JVM)
 
