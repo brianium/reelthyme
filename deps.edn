@@ -16,7 +16,8 @@
                    slipset/deps-deploy {:mvn/version "0.2.2"}}
                   :ns-default slim.lib
                   :exec-args {:lib         com.github.brianium/reelthyme
-                              :version     "2025.11.30.1359"
+                              :version     "2025.12.02.1713"
                               :url         "https://github.com/brianium/reelthyme"
                               :description "Build realtime conversational apps with the OpenAI Realtime API"
-                              :developer   "Brian Scaturro"}}}}
+                              :developer   "Brian Scaturro"
+                              :src-dirs    ["src/clj" "src/cljc" "src/cljs"]}}}}
