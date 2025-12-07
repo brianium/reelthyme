@@ -30,8 +30,7 @@
    :cljs
    (defn out->json
      [ev]
-     (js->clj
-      (.parse js/JSON (.-data ev)) :keywordize-keys true)))
+     (.parse js/JSON (.-data ev))))
 
 (defn pong?
   "Check if the given event map represents a pong event"
@@ -47,11 +46,13 @@
    (defn connect!
      "Open a websocket connection with OpenAI. This channel type is intended for use in server-to-server
      applications. The stream! function provides a convenient means for taking events while controlling audio playback
-     and the capture-audio! function can be used to add mic support to web socket backed connections
+     and the capture-audio! function can be used to add mic support to web socket backed connections. This type is also useful
+     for creating a \"sideband\" channel that follows a client side call. This is the purpose of the call-id parameter.
 
      Params:
      :api-key    - (optional) A valid api key for OpenAI. Defaults to reading the OPENAI_API_KEY environment variable
-     :uri        - (optional) The websocket uri to connect to. Defaults to wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17
+     :model      - (optional) The realtime model to use for this websocket session. Deafults to gpt-realtime
+     :call-id    - (optional) Overrides the :model parameter. Used for creating a [sideband](https://platform.openai.com/docs/guides/realtime-server-controls) channel
      :xf-out     - (optional) A transducer that will be applied to all outputs. Note: this xf will be applied AFTER filtering and json serialization
      :ex-handler - (optional) An ex-handler for the output channel. Generally pairs with :xf - follows the same rules as clojure.core.async/chan
      :xf-in      - (optional) A transducer that will be applied to every input value BEFORE json serialization. Should return an event map or throw.
@@ -59,8 +60,14 @@
      :log-fn     - (optional) A function of form (fn [& xs)). Can be useful for debugging"
      ([]
       (connect! {}))
-     ([{:keys [xf-out ex-handler xf-in log-fn] :as params}]
-      (let [xf-out* (comp (remove pong?) ;;; The default out channel transducer ensures a stream of ONLY openai events as Clojure maps
+     ([{:keys [call-id model xf-out ex-handler xf-in log-fn]
+        :or {model "gpt-realtime"}
+        :as params}]
+      (let [base    "wss://api.openai.com/v1/realtime"
+            uri     (if (some? call-id)
+                      (str base "?call_id=" call-id)
+                      (str base "?model=" model))
+            xf-out* (comp (remove pong?) ;; The default out channel transducer ensures a stream of ONLY openai events as Clojure maps
                           (map out->json)
                           (filter event?))
             xf-out (if xf-out
@@ -70,8 +77,7 @@
                      (comp xf-in (map in->json))
                      (map in->json))]
         (if-some [api-key (get params :api-key (System/getenv "OPENAI_API_KEY"))]
-          (ws/websocket!
-           (get params :uri "wss://api.openai.com/v1/realtime?model=gpt-realtime")
+          (ws/websocket! uri
            (cond-> params
              (some? log-fn) (assoc :log log-fn)
              :always (merge {:builder-fn (fn [^WebSocket$Builder builder]

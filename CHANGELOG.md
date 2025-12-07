@@ -1,5 +1,24 @@
 # Change Log
 
+## [2025.12.07.1623] - 2025-12-07
+
+### Added
+
+**ClojureScript**
+
+A new event of type `"reelthyme.call_id"` will be sent to WebRTC channels. This event is used to capture the call id of the session which can be used for sideband channels on the server.
+
+**Clojure**
+
+The `connect!` method no accepts a `:call-id` parameter that allows server side control of a client side conversation. If `:call-id` is given, `:model` is ignored. If using a `:call-id`, ensure that an `:api-key` is given using the `:value` of the client-secret generated for authenticating the client side channel.
+
+### Changed
+
+**BREAKING CHANGES**
+
+- The WebRTC transport used via CLJS no longer uses `js->clj` by default. Native JS objects are the default. `js->clj` can still be applied by providing an `:xf-out` transducer.
+- The websocket transport no longer supports a `:uri` param, and instead supports `:model` and `:call-id`. `:model` defaults to `gpt-realtime` but can be changed to `gpt-realtime-mini` for example.
+
 ## [2025.11.30.1359] - 2025-11-30
 
 ### Added

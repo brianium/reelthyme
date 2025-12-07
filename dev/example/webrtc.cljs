@@ -25,6 +25,15 @@
          (put! result-ch (js->clj data :keywordize-keys true))))
      result-ch)))
 
+(defn follow-conversation!
+  [call-id client-secret]
+  (js/fetch
+   "/sideband"
+   (clj->js
+    {:method "post"
+     :body (.stringify js/JSON #js {:call_id call-id
+                                    :client_secret client-secret})})))
+
 (defn dispatch-click
   "State of the art hyper reactive click event delegation"
   [e event-ch]
@@ -109,25 +118,26 @@
 
 (defn update-tokens
   "Update token state based on the payload of the given response.done event"
-  [state {:keys [response]}]
-  (let [usage (:usage response)
-        input-token-details (:input_token_details usage)
-        cached-input-details (:cached_tokens_details input-token-details)
-        output-token-details (:output_token_details usage)]
+  [state event]
+  (let [response (.-response event)
+        usage    (.-usage response)
+        input-token-details (.-input_token_details usage)
+        cached-input-details (.-cached_tokens_details input-token-details)
+        output-token-details (.-output_token_details usage)]
     (-> state
-        (update-in [:input-tokens :text] + (:text_tokens input-token-details))
-        (update-in [:input-tokens :text-cached] + (:text_tokens cached-input-details))
-        (update-in [:input-tokens :audio] + (:audio_tokens input-token-details))
-        (update-in [:input-tokens :audio-cached] + (:audio_tokens cached-input-details))
-        (update-in [:output-tokens :text] + (:text_tokens output-token-details))
-        (update-in [:output-tokens :audio] + (:audio_tokens output-token-details)))))
+        (update-in [:input-tokens :text] + (.-text_tokens input-token-details))
+        (update-in [:input-tokens :text-cached] + (.-text_tokens cached-input-details))
+        (update-in [:input-tokens :audio] + (.-audio_tokens input-token-details))
+        (update-in [:input-tokens :audio-cached] + (.-audio_tokens cached-input-details))
+        (update-in [:output-tokens :text] + (.-text_tokens output-token-details))
+        (update-in [:output-tokens :audio] + (.-audio_tokens output-token-details)))))
 
 (defn update-limits
   "Update limit state based on the payload of the given rate_limits.updated event"
-  [state {:keys [rate_limits]}]
-  (if-some [tokens (first (filterv #(= "tokens" (:name %)) rate_limits))]
-    (-> (assoc-in state [:rate-limits :limit] (:limit tokens))
-        (assoc-in [:rate-limits :remaining] (:remaining tokens)))
+  [state event]
+  (if-some [tokens (first (filterv #(= "tokens" (.-name %)) (.-rate_limits event)))]
+    (-> (assoc-in state [:rate-limits :limit] (.-limit tokens))
+        (assoc-in [:rate-limits :remaining] (.-remaining tokens)))
     state))
 
 (defn app
@@ -142,10 +152,12 @@
         content-types ($ "input[name=\"content_type\"]")
         event-ch      (chan)
         kill-ch       (chan)]
-    (go-loop [state {:mounted?   false
+    (go-loop [state {:call-id    nil
+                     :client-secret nil
+                     :mounted?   false
                      :custom-track? false
                      :type       "realtime"
-                     :model      "gpt-realtime" ;; omitting this results in a really bizarre empty error where all keys have empty values
+                     :model      "gpt-realtime-mini" ;; omitting this results in a really bizarre empty error where all keys have empty values
                      :content-types #{"input_text"}
                      :output_modalities ["text"]
                      :session-ch (chan)
@@ -175,9 +187,19 @@
             (do "nothing")
 
             session-ch ;;; Read server events from OpenAI
-            (let [{:keys [type] :as ev} v]
-              (println ev)
+            (let [ev   v
+                  type (.-type ev)]
+              (js/console.log ev)
               (condp = type
+                "session.created"
+                (let [{:keys [call-id client-secret]} state]
+                  (follow-conversation! call-id client-secret)
+                  (recur state))
+
+                "reelthyme.call_id"
+                (let [call-id (.-call_id ev)]
+                  (recur (assoc state :call-id call-id)))
+
                 "conversation.item.added"
                 (do (when (= #{"input_text"} (:content-types state))
                       (put! session-ch {:type "response.create"
@@ -222,9 +244,9 @@
                         :media-stream-track
                         (let [stream (<p! (.getUserMedia js/navigator.mediaDevices #js {:audio true}))
                               track  (aget (.getAudioTracks stream) 0)]
-                          (println "Using custom track")
+                          (js/console.log "Using custom track")
                           track))))]
-                (recur (assoc state :fetching? false :session-ch session-ch :active? true)))
+                (recur (assoc state :fetching? false :session-ch session-ch :active? true :client-secret (get-in v [:client-secret :value]))))
               :update-content-type
               (let [{:keys [value]} v]
                 (recur (assoc state :content-types #{value})))
@@ -244,6 +266,6 @@
 (defn ^:after-load after-load
   []
   (when-some [kill-ch @*app]
-    (println "Reinitializing application")
+    (js/console.log "Reinitializing application")
     (put! kill-ch :done)
     (reset! *app (app))))
