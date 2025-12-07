@@ -1,8 +1,10 @@
 (ns reelthyme.transport.webrtc
   "WebRTC is clearly superior for this sort of application. "
-  (:require [cljs.core.async :as a :refer [go go-loop chan put! <!]]
+  (:require [clojure.string :as string]
+            [cljs.core.async :as a :refer [go go-loop chan put! <!]]
             [cljs.core.async.interop :refer-macros [<p!]]
             [cljs.core.async.impl.protocols :as proto :refer [ReadPort Channel WritePort]]))
+
 
 (defn stop-tracks!
   "Stop all tracks attached to the peer connection"
@@ -51,14 +53,14 @@
     (cond
       (some? media-stream-track)
       (put! done media-stream-track)
-      
+
       silent?
       (let [ctx (js/AudioContext.)
             dst (.createMediaStreamDestination ctx)
             stream (.-stream dst)
             track (aget (.getAudioTracks stream) 0)]
         (put! done track))
-      
+
       :else
       (go
         (let [stream (<p! (.getUserMedia js/navigator.mediaDevices #js {:audio true}))
@@ -117,8 +119,17 @@
                                           :headers
                                           #js{"Authorization" (str "Bearer " ephemeral-key)
                                               "Content-Type"  "application/sdp"}}))
+             call-id (some->
+                      res
+                      (.-headers)
+                      (.get "Location")
+                      (string/split #"/")
+                      (last))
              answer #js{:type "answer"
                         :sdp  (<p! (.text res))}]
-         (<p! (.setRemoteDescription pc answer))))
+         (<p! (.setRemoteDescription pc answer))
+         (when (some? call-id)
+           (put! out-ch #js {:data
+                             (str "{\"type\":\"reelthyme.call_id\",\"call_id\":\"" call-id "\"}")}))))
 
      (rtc-chan in-ch out-ch pc audio-elem))))

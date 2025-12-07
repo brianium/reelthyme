@@ -138,6 +138,18 @@ calling `navigator.mediaDevices.getUserMedia()`.
 
 It is possible to use text for input AND output by setting `:content-types` to `#{"input_text"}`.
 
+## Sideband Channels
+
+See [OpenAI docs](https://platform.openai.com/docs/guides/realtime-server-controls). A sideband channel allows a client side conversation to be followed on
+the server. If using CLJS, a special event will be sent of type `"reelthyme.call_id"`. This event will have a `"call_id"` property that can be passed back to the server
+and used via the websocket transport using the `:call_id` param.
+
+``` clojure
+(def session-ch (rt/connect! {:call-id "rtc_i_came_from_the_client" :api-key "same_client_secret_value_used_on_client"}))
+```
+
+This is fun and cool, because you can control the client from the backend (tool calls, store context, etc...)
+
 ## Example Workflow (JVM)
 
 1. **connect!** opens and authenticates the channel.  
@@ -163,6 +175,10 @@ The ClojureScript version of connect! requires a session with an ephemeral clien
 ;;; ClojureScript
 (connect! client-secret params)
 ```
+
+In the JVM version, you can specify `:model` or `:call-id` directly in params, but in CLJS, the `:model` property is specified when creating a client secret server side. `:call-id` is only supported using the websocket transport.
+
+Also note, that for efficiency sake, server events do not go through `js->clj` by default. You can ad an `:xf-out` param to do this if you desire, but the default behavior is to use native JS objects for server events.
 
 It should also be noted that browsers often impose restrictions on creating audio contexts of any kind without user interaction. This means that ClojureScript implementations will likely have to put connect! behind a user interaction (such as a click).
 

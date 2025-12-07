@@ -71,7 +71,12 @@
                  (.newWebSocketBuilder)
                  (builder-fn)
                  (.buildAsync (URI/create uri) listener))
-          ws (.join cf)]
+          ws (try
+               (.join cf)
+               (catch Exception e
+                 (println (.getMessage e))
+                 (println (.getCause e))
+                 (throw e)))]
       (reset! ws-atom ws))
     {:in in :out out}))
 
