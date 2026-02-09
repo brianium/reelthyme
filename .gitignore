@@ -11,3 +11,6 @@
 .aider*
 target/
 README.html
+native/out/
+native/zig-out/
+native/.zig-cache/

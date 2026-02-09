@@ -99,3 +99,67 @@
   (a/close! session-ch)
 
   (do "good"))
+
+;; Usage with AEC (Acoustic Echo Cancellation)
+;; Requires Java 22+ and JVM flag: --enable-native-access=ALL-UNNAMED
+
+(comment
+  ;; Create an echo canceller — shared between playback and capture
+  (def aec (rt/echo-canceller))
+
+  ;; Connect as usual
+  (def session-ch (rt/connect! {:xf-in (map validate)}))
+
+  ;; Pass :echo-canceller to stream! so playback frames are fed to the canceller
+  (let [[event-ch stop-audio] (rt/stream! session-ch {:echo-canceller aec})]
+    (def event-ch event-ch)
+    (def stop-audio stop-audio))
+
+  ;; Same flow as before, but capture-audio! also gets the echo canceller
+  ;; so mic input is echo-cancelled before being sent
+  (a/go-loop [stop-fn nil]
+    (let [ev (a/<! event-ch)]
+      (println (:type ev))
+      (if (nil? ev)
+        (when stop-fn
+          (stop-fn))
+        (condp = (:type ev)
+          "session.updated"
+          (recur (rt/capture-audio! session-ch {:echo-canceller aec}))
+
+          "input_audio_buffer.committed"
+          (do (stop-fn)
+              (recur stop-fn))
+
+          "response.audio.done"
+          (recur (rt/capture-audio! session-ch {:echo-canceller aec}))
+
+          "error"
+          (println ev)
+
+          (recur stop-fn)))))
+
+  ;; Configure the session as usual
+  (a/put!
+   session-ch
+   {:type "session.update"
+    :session
+    {:type "realtime"
+     :audio
+     {:input
+      {:turn_detection
+       {:create_response true
+        :interrupt_response false
+        :type "server_vad"}}
+      :output
+      {:format
+       {:rate 24000
+        :type "audio/pcm"}
+       :voice "verse"}}}})
+
+  ;; Clean up
+  (stop-audio)
+  (a/close! session-ch)
+  (rt/destroy-echo-canceller! aec)
+
+  (do "good with aec"))

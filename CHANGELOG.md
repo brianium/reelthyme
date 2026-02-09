@@ -1,5 +1,22 @@
 # Change Log
 
+## [Unreleased]
+
+### Added
+
+**Clojure (JVM)**
+
+- Acoustic Echo Cancellation (AEC) support via SpeexDSP and Panama FFM (Java 22+)
+- New functions: `echo-canceller`, `destroy-echo-canceller!`, `reset-echo-canceller!`
+- `stream!` now accepts an options map as its second argument: `{:echo-canceller ec :buf-or-n n :xf xf :ex-handler h}`
+- `capture-audio!` now accepts an `:echo-canceller` option
+- Pre-built native libraries for macOS (aarch64, x86_64), Linux (aarch64, x86_64), and Windows (x86_64)
+
+### Changed
+
+- `stream!` signature is backward compatible — passing a non-map value as the second arg preserves the legacy `[buf-or-n xf ex-handler]` behavior
+- The `reelthyme.audio.aec` namespace is lazily loaded via `requiring-resolve`, so there is no hard dependency on Java 22+ unless AEC is used
+
 ## [2025.12.07.1623] - 2025-12-07
 
 ### Added

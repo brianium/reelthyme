@@ -1,0 +1,28 @@
+name: Build Native Libraries
+
+on:
+  push:
+    paths:
+      - 'native/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Zig
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.15.2
+
+      - name: Build all targets
+        working-directory: native
+        run: bash build-all.sh
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-libs
+          path: resources/native/

@@ -78,14 +78,14 @@
                      (map in->json))]
         (if-some [api-key (get params :api-key (System/getenv "OPENAI_API_KEY"))]
           (ws/websocket! uri
-           (cond-> params
-             (some? log-fn) (assoc :log log-fn)
-             :always (merge {:builder-fn (fn [^WebSocket$Builder builder]
-                                           (-> builder
-                                               (.header "Authorization" (str "Bearer " api-key))))
-                             :xf-in      xf-in
-                             :xf-out     xf-out
-                             :ex-handler ex-handler})))
+                         (cond-> params
+                           (some? log-fn) (assoc :log log-fn)
+                           :always (merge {:builder-fn (fn [^WebSocket$Builder builder]
+                                                         (-> builder
+                                                             (.header "Authorization" (str "Bearer " api-key))))
+                                           :xf-in      xf-in
+                                           :xf-out     xf-out
+                                           :ex-handler ex-handler})))
           (throw (ex-info "api-key parameter not given or OPENAI_API_KEY not found in environment" {:reason :no-key-provided}))))))
    :cljs
    (defn connect!
@@ -121,38 +121,49 @@
      is a function that can be invoked with 0 or 1 arguments and is used to control audio playback. stop-audio
      accepts an optional map of options that will be passed to the platform specific stop-audio function.
 
+     The first optional argument can be a map of options or a buf-or-n value for backward compatibility:
+     - If a map, recognized keys are :echo-canceller, :buf-or-n, :xf, :ex-handler
+     - If not a map, treated as [buf-or-n xf ex-handler] positional args (legacy)
+
      Options for java:
      - :drain? - (bool) If true, will finish all playback before shutting down. Otherwise shuts down immediately. Default is false
 
      Note: This function aims to be a sensible default for a multimodal session. If greater control
      is desired, just take from a session channel directly"
-     [session & [buf-or-n xf ex-handler]]
-     (let [event-ch   (a/chan buf-or-n xf ex-handler)
-           audio-ch   (a/chan)
-           stop-audio (audio/stream-audio! audio-ch)]
-       ;;; Route audio events to audio thread, and text events to text-ch
-       (a/go-loop []
-         (let [event (a/<! session)]
-           (if (nil? event)
-             (do (a/close! event-ch)
-                 (a/close! audio-ch)
-                 (stop-audio {:drain? true}))
-             (let [{:keys [type]} event]
-               (condp = type
-                 "response.output_audio.delta"
-                 (when (a/put! audio-ch event)
-                   (recur))
+     ([session]
+      (stream! session {}))
+     ([session opts-or-buf & [xf ex-handler]]
+      (let [{:keys [echo-canceller buf-or-n xf ex-handler]}
+            (if (map? opts-or-buf)
+              opts-or-buf
+              {:buf-or-n opts-or-buf :xf xf :ex-handler ex-handler})
+            event-ch   (a/chan buf-or-n xf ex-handler)
+            audio-ch   (a/chan)
+            stop-audio (audio/stream-audio! audio-ch :echo-canceller echo-canceller)]
+        ;;; Route audio events to audio thread, and text events to text-ch
+        (a/go-loop []
+          (let [event (a/<! session)]
+            (if (nil? event)
+              (do (a/close! event-ch)
+                  (a/close! audio-ch)
+                  (stop-audio {:drain? true}))
+              (let [{:keys [type]} event]
+                (condp = type
+                  "response.output_audio.delta"
+                  (when (a/put! audio-ch event)
+                    (recur))
 
-                 (when (a/put! event-ch event)
-                   (recur)))))))
-       [event-ch stop-audio])))
+                  (when (a/put! event-ch event)
+                    (recur)))))))
+        [event-ch stop-audio]))))
 
 #?(:clj
    (defn capture-audio!
      "Start capturing audio. Returns a stop function. Options given
      will be forwarded to a platform specific API. Common options:
 
-     - :timeout-ms - How often to append chunks to the OpenAI input buffer. defaults to 500 ms"
+     - :interval-ms - How often to append chunks to the OpenAI input buffer. defaults to 500 ms
+     - :echo-canceller - (optional) An echo canceller created by echo-canceller"
      ([session-ch]
       (capture-audio! session-ch {:interval-ms 500}))
      ([session-ch options]
@@ -161,6 +172,32 @@
          (a/put! session-ch {:type  "input_audio_buffer.append"
                              :audio chunk}))
        options))))
+
+#?(:clj
+   (defn echo-canceller
+     "Create an acoustic echo canceller for use with stream! and capture-audio! on the JVM.
+     Requires Java 22+ and --enable-native-access=ALL-UNNAMED JVM flag.
+
+     Options:
+       :frame-size    - samples per frame (default 480 = 20ms at 24kHz)
+       :filter-length - echo tail in samples (default 4800 = 200ms at 24kHz)
+       :sample-rate   - sample rate in Hz (default 24000)"
+     ([]
+      (echo-canceller {}))
+     ([opts]
+      ((requiring-resolve 'reelthyme.audio.aec/create-echo-canceller) opts))))
+
+#?(:clj
+   (defn destroy-echo-canceller!
+     "Free native resources associated with an echo canceller."
+     [ec]
+     ((requiring-resolve 'reelthyme.audio.aec/destroy-echo-canceller!) ec)))
+
+#?(:clj
+   (defn reset-echo-canceller!
+     "Reset echo canceller state (e.g. after a pause in conversation)."
+     [ec]
+     ((requiring-resolve 'reelthyme.audio.aec/reset-echo-canceller!) ec)))
 
 #?(:clj
    (defn create-client-secret

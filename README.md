@@ -9,7 +9,7 @@ OpenAI's [Realtime API](https://platform.openai.com/docs/guides/realtime)
 
 - [x] WebSocket transport for JVM
 - [x] WebRTC transport for ClojureScript
-- [ ] Acoustic Echo Cancellation (AEC) support for JVM
+- [x] Acoustic Echo Cancellation (AEC) support for JVM
 
 ## Overview
 
@@ -17,9 +17,10 @@ reelthyme provides a simple, core.async-driven API for interacting with OpenAI's
 
 ## Key Concepts
 
-- **connect!**: Opens a session channel for sending client events and receiving server events. On the JVM this uses WebSocket, while in ClojureScript it uses WebRTC and manages audio playback automatically.  
-- **stream!** (JVM only): Splits incoming server events into a filtered event channel and an audio stop function.  
-- **capture-audio!** (JVM only): Streams microphone input into the session as audio-buffer events.  
+- **connect!**: Opens a session channel for sending client events and receiving server events. On the JVM this uses WebSocket, while in ClojureScript it uses WebRTC and manages audio playback automatically.
+- **stream!** (JVM only): Splits incoming server events into a filtered event channel and an audio stop function.
+- **capture-audio!** (JVM only): Streams microphone input into the session as audio-buffer events.
+- **echo-canceller** (JVM only, Java 22+): Creates an acoustic echo canceller to prevent the model from hearing its own output.
 - **core.async channels**: All data flows via clojure.core.async channels and go blocks for composability.
 
 ## Basic Usage
@@ -152,10 +153,11 @@ This is fun and cool, because you can control the client from the backend (tool 
 
 ## Example Workflow (JVM)
 
-1. **connect!** opens and authenticates the channel.  
-2. **stream!** routes audio to an audio thread and events to your go-loop.  
-3. **capture-audio!** pushes live audio chunks into the session.  
-4. Use **core.async** puts and takes to drive your application logic.
+1. **connect!** opens and authenticates the channel.
+2. Optionally create an **echo-canceller** for hands-free use (Java 22+).
+3. **stream!** routes audio to an audio thread and events to your go-loop.
+4. **capture-audio!** pushes live audio chunks into the session.
+5. Use **core.async** puts and takes to drive your application logic.
 
 ## Example Workflow (ClojureScript with WebRTC)
 
@@ -184,6 +186,35 @@ It should also be noted that browsers often impose restrictions on creating audi
 
 Check out the [example ClojureScript application](dev/example/webrtc.cljs). It might also be helpful to see the [example handler](dev/example/handler.clj) used to create client secrets. See [OpenAI docs on creating client secrets](https://platform.openai.com/docs/api-reference/realtime-sessions/create-realtime-client-secret).
 
-## Note on Acoustic Echo Cancellation:
+## Acoustic Echo Cancellation (JVM)
 
-Acoustic Echo Cancellation (AEC) can be used to prevent awkward experiences where an agent hears itself and gets stuck in an infinite loop speaking to itself. AEC comes standard with WebRTC, so this issue should not surface when using it. If using the websocket transport on the JVM, you may have a better experience using a headset or disabling vads for a more "push to talk" approach.
+AEC prevents the model from hearing its own audio output through the microphone, which avoids infinite speaking loops. WebRTC gets this for free via the browser; on the JVM you can enable it using the built-in SpeexDSP-based echo canceller.
+
+**Requirements:** Java 22+ and the `--enable-native-access=ALL-UNNAMED` JVM flag.
+
+```clojure
+;; Create a shared echo canceller
+(def aec (rt/echo-canceller))
+
+;; Pass to both stream! and capture-audio!
+(let [[event-ch stop-audio] (rt/stream! session-ch {:echo-canceller aec})]
+  (def stop-capture (rt/capture-audio! session-ch {:echo-canceller aec})))
+
+;; Cleanup
+(stop-capture)
+(stop-audio)
+(rt/destroy-echo-canceller! aec)
+(a/close! session-ch)
+```
+
+The `echo-canceller` function accepts optional keyword arguments for tuning:
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `:frame-size` | 480 | Samples per frame (20ms at 24kHz) |
+| `:filter-length` | 4800 | Echo tail in samples (200ms at 24kHz) |
+| `:sample-rate` | 24000 | Sample rate in Hz |
+
+Without AEC, the existing API is unchanged — just omit the `:echo-canceller` option.
+
+If AEC is not desired or Java 22+ is not available, using a headset or disabling VADs for a "push to talk" approach are good alternatives.
